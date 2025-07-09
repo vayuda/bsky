@@ -6,6 +6,7 @@
     "@atproto/api": "^0.15.14",
     "@google/generative-ai": "^0.24.1",
     "@radix-ui/react-avatar": "^1.1.10",
+    "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-slot": "^1.2.3",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",

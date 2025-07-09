@@ -22,21 +22,151 @@ export const getDiscoverFeed = async () => {
 };
 
 export const getPopularFeed = async () => {
-  // Get posts from the "Popular with Friends" algorithm
-  const response = await agent.app.bsky.feed.getFeed({
-    feed: "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/bsky-team",
-    limit: 30,
-  });
-  return response.data.feed;
+  try {
+    // Get posts from recent timeframe and sort by engagement
+    const popularPosts: any[] = [];
+    
+    // Search for posts with high engagement from the last 24 hours
+    const searchTerms = [
+      "", // Empty search to get recent posts
+      "the", // Common word to find popular discussions
+      "new", // Posts about new things tend to be popular
+      "just", // Posts with "just" tend to be timely
+      "today", // Today's popular content
+    ];
+    
+    for (const term of searchTerms.slice(0, 3)) { // Limit to 3 terms for performance
+      try {
+        const searchResult = await searchPosts(term, 50);
+        
+        // Filter to recent posts (last 24 hours) with good engagement
+        const allPosts = searchResult.posts;
+        const recentPosts: any[] = [];
+        const oldPosts: any[] = [];
+        
+        console.log(`📊 Search term "${term}": Found ${allPosts.length} total posts`);
+        
+        allPosts.forEach(post => {
+          const postAge = Date.now() - new Date(post.indexedAt).getTime();
+          const hoursOld = postAge / (1000 * 60 * 60);
+          const totalEngagement = (post.likeCount || 0) + (post.replyCount || 0) + (post.repostCount || 0);
+          
+          if (hoursOld <= 24) {
+            recentPosts.push({
+              ...post,
+              hoursOld: Math.round(hoursOld * 10) / 10,
+              totalEngagement
+            });
+          } else {
+            oldPosts.push({
+              ...post,
+              hoursOld: Math.round(hoursOld * 10) / 10,
+              totalEngagement
+            });
+          }
+        });
+        
+        console.log(`📊 "${term}" - Last 24hrs: ${recentPosts.length} posts, Older: ${oldPosts.length} posts`);
+        
+        // Show engagement stats for recent posts
+        if (recentPosts.length > 0) {
+          const engagementStats = recentPosts.map(p => p.totalEngagement).sort((a, b) => b - a);
+          console.log(`📊 "${term}" - Recent engagement range: ${engagementStats[0]} (max) to ${engagementStats[engagementStats.length - 1]} (min)`);
+          console.log(`📊 "${term}" - Top 5 recent posts:`, recentPosts.slice(0, 5).map(p => `${p.totalEngagement} engagement (${p.hoursOld}h old)`));
+        }
+        
+        // Filter by engagement threshold
+        const highEngagementPosts = recentPosts.filter(post => post.totalEngagement >= 5);
+        console.log(`📊 "${term}" - Posts with ≥5 engagement: ${highEngagementPosts.length}/${recentPosts.length}`);
+        
+        popularPosts.push(...highEngagementPosts);
+        
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 200));
+      } catch (error) {
+        console.warn(`Search failed for term "${term}":`, error);
+      }
+    }
+    
+    // Remove duplicates
+    const uniquePosts = popularPosts.filter((post, index, array) => 
+      array.findIndex(p => p.uri === post.uri) === index
+    );
+    
+    // Sort by engagement score (weighted: likes + replies*2 + reposts*1.5)
+    const scoredPosts = uniquePosts.map(post => ({
+      ...post,
+      engagementScore: (post.likeCount || 0) + (post.replyCount || 0) * 2 + (post.repostCount || 0) * 1.5
+    }));
+    
+    // Sort by engagement score and take top posts
+    scoredPosts.sort((a, b) => b.engagementScore - a.engagementScore);
+    
+    // Final stats before returning
+    console.log(`📈 FINAL POPULAR FEED STATS:`);
+    console.log(`📈 Total unique posts found: ${uniquePosts.length}`);
+    console.log(`📈 Posts after scoring: ${scoredPosts.length}`);
+    
+    if (scoredPosts.length > 0) {
+      const topEngagement = scoredPosts.slice(0, 10).map(p => ({
+        score: p.engagementScore,
+        likes: p.likeCount || 0,
+        replies: p.replyCount || 0,
+        reposts: p.repostCount || 0,
+        hours: p.hoursOld,
+        author: p.author.handle
+      }));
+      console.log(`📈 Top 10 posts by engagement:`, topEngagement);
+    }
+    
+    // Convert to feed format
+    const feed = scoredPosts.slice(0, 30).map(post => ({
+      post: post,
+      reply: undefined,
+      reason: undefined,
+      feedContext: undefined,
+    }));
+    
+    console.log(`📈 Popular feed: Returning ${feed.length} posts with high engagement`);
+    return feed;
+    
+  } catch (error) {
+    console.error("Error fetching popular feed:", error);
+    
+    // Fallback to official algorithm if our implementation fails
+    try {
+      const response = await agent.app.bsky.feed.getFeed({
+        feed: "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/bsky-team",
+        limit: 30,
+      });
+      return response.data.feed;
+    } catch (fallbackError) {
+      console.error("Fallback popular feed also failed:", fallbackError);
+      return [];
+    }
+  }
 };
 
 export const createPost = async (text: string) => {
   await agent.post({ text });
 };
 
+export const getPostThread = async (uri: string) => {
+  try {
+    const response = await agent.app.bsky.feed.getPostThread({
+      uri,
+      depth: 10,
+    });
+    return response.data.thread;
+  } catch (error) {
+    console.error("Error fetching post thread:", error);
+    throw error;
+  }
+};
+
 export const searchPosts = async (
   query: string,
-  limit = 25,
+  limit = 100,
   cursor?: string,
 ) => {
   try {
@@ -45,14 +175,6 @@ export const searchPosts = async (
       limit,
       cursor,
     });
-
-    // Debug: Log author structure to understand available data (only first time)
-    if (response.data.posts.length > 0 && Math.random() < 0.1) {
-      console.log(
-        "Sample author data:",
-        JSON.stringify(response.data.posts[0].author, null, 2),
-      );
-    }
 
     return {
       posts: response.data.posts,
@@ -260,77 +382,263 @@ export const generateCustomFeed = async (
     `🔍 Searching for ${targetPosts} quality posts (16 hours to 3 days old)...`,
   );
 
-  // Helper function to search with pagination
+  // Helper function to search with exponential hopping and backward time search
   const searchWithPagination = async (query: string, searchType: string) => {
     let cursor: string | undefined;
     let pageCount = 0;
     let foundPosts: any[] = [];
+    let imagePosts: any[] = [];
+    let pageHops = [5, 10, 20, 40, 80]; // Exponential hopping sequence
+    let currentHopIndex = 0;
 
+    // Phase 1: Exponential hopping to find images quickly
     while (
-      pageCount < maxPages &&
+      currentHopIndex < pageHops.length &&
       foundPosts.length < targetPosts / keywords.length
     ) {
-      try {
-        const result = await searchPosts(query, 100, cursor); // Larger batches
-        const posts = result.posts;
-        cursor = result.cursor;
+      const targetPage = pageHops[currentHopIndex];
 
-        if (posts.length === 0) break;
+      // Skip pages we've already processed
+      while (pageCount < targetPage - 1 && cursor) {
+        try {
+          const result = await searchPosts(query, 100, cursor); // Max batch size for efficiency
+          cursor = result.cursor;
+          pageCount++;
 
-        // Apply age filter first
-        const ageFilteredPosts = filterPostsByAge(posts);
+          if (!cursor) break;
 
-        // Add to collection with search context
-        foundPosts.push(
-          ...ageFilteredPosts.map((post) => ({
-            ...post,
-            searchTerm: query,
-            searchType,
-          })),
-        );
+          // Minimal delay for skipping
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        } catch (error) {
+          console.warn(
+            `Failed to skip to page ${targetPage} for "${query}":`,
+            error,
+          );
+          break;
+        }
+      }
 
-        pageCount++;
+      // Process the target page
+      if (cursor || pageCount === 0) {
+        try {
+          const result = await searchPosts(query, 100, cursor); // Max batch size for efficiency
+          const posts = result.posts;
+          cursor = result.cursor;
+          pageCount++;
 
-        // Stop if no more pages
-        if (!cursor) break;
+          if (posts.length === 0) break;
 
-        // Rate limiting
-        await new Promise((resolve) => setTimeout(resolve, 300));
+          // Apply age filter first
+          const ageFilteredPosts = filterPostsByAge(posts);
 
-        console.log(
-          `  📄 ${query} page ${pageCount}: ${ageFilteredPosts.length}/${posts.length} posts in age range`,
-        );
-      } catch (error) {
-        console.warn(
-          `Failed to search page ${pageCount} for "${query}":`,
-          error,
-        );
-        break;
+          // Separate image posts from regular posts
+          const postsWithImages = ageFilteredPosts.filter(
+            (post) => post.embed?.images?.length > 0 || post.embed?.video,
+          );
+          const postsWithoutImages = ageFilteredPosts.filter(
+            (post) => !(post.embed?.images?.length > 0 || post.embed?.video),
+          );
+
+          // Add to appropriate collections
+          imagePosts.push(
+            ...postsWithImages.map((post) => ({
+              ...post,
+              searchTerm: query,
+              searchType,
+            })),
+          );
+
+          foundPosts.push(
+            ...ageFilteredPosts.map((post) => ({
+              ...post,
+              searchTerm: query,
+              searchType,
+            })),
+          );
+
+          // Rate limiting
+          await new Promise((resolve) => setTimeout(resolve, 300));
+
+          console.log(
+            `  📄 ${query} page ${pageCount} (hop ${targetPage}): ${ageFilteredPosts.length}/${posts.length} posts in age range, ${postsWithImages.length} with images`,
+          );
+
+          // If we found images, break out of exponential hopping
+          if (postsWithImages.length > 0) {
+            console.log(
+              `  🎯 Found ${postsWithImages.length} image posts on page ${pageCount}, switching to backward search`,
+            );
+            break;
+          }
+        } catch (error) {
+          console.warn(
+            `Failed to search page ${pageCount} for "${query}":`,
+            error,
+          );
+          break;
+        }
+      }
+
+      currentHopIndex++;
+    }
+
+    // Phase 2: If we found images, go backwards in time until pool quota is reached
+    if (
+      imagePosts.length > 0 &&
+      foundPosts.length < targetPosts / keywords.length
+    ) {
+      console.log(
+        `  ⏪ Starting backward time search for "${query}" to fill pool quota`,
+      );
+
+      // Continue searching backwards from current position
+      let backwardPages = 0;
+      const maxBackwardPages = 20;
+
+      while (
+        cursor &&
+        backwardPages < maxBackwardPages &&
+        foundPosts.length < targetPosts / keywords.length
+      ) {
+        try {
+          const result = await searchPosts(query, 100, cursor); // Max batch size for efficiency
+          const posts = result.posts;
+          cursor = result.cursor;
+          pageCount++;
+          backwardPages++;
+
+          if (posts.length === 0) break;
+
+          // Apply age filter first
+          const ageFilteredPosts = filterPostsByAge(posts);
+
+          // Add to collection with search context
+          foundPosts.push(
+            ...ageFilteredPosts.map((post) => ({
+              ...post,
+              searchTerm: query,
+              searchType,
+            })),
+          );
+
+          // Rate limiting
+          await new Promise((resolve) => setTimeout(resolve, 300));
+
+          console.log(
+            `  📄 ${query} backward page ${backwardPages}: ${ageFilteredPosts.length}/${posts.length} posts in age range`,
+          );
+        } catch (error) {
+          console.warn(
+            `Failed to search backward page ${backwardPages} for "${query}":`,
+            error,
+          );
+          break;
+        }
       }
     }
 
     console.log(
-      `  ✅ ${query}: Found ${foundPosts.length} posts after ${pageCount} pages`,
+      `  ✅ ${query}: Found ${foundPosts.length} posts (${imagePosts.length} with images) after ${pageCount} pages`,
     );
     return foundPosts;
   };
 
-  // Search by keywords with pagination
-  for (const keyword of keywords.slice(0, 6)) {
-    const keywordPosts = await searchWithPagination(keyword, "keyword");
-    allPosts.push(...keywordPosts);
+  // Search by keywords with prioritization - first keyword is most important
+  console.log(
+    `🎯 Prioritizing first keyword: "${keywords[0]}" as primary search`,
+  );
 
-    // Early exit if we have enough posts
-    if (allPosts.length >= targetPosts * 2) break;
+  // Search first keyword extensively
+  if (keywords.length > 0) {
+    const primaryKeywordPosts = await searchWithPagination(
+      keywords[0],
+      "primary_keyword",
+    );
+    allPosts.push(...primaryKeywordPosts);
+
+    console.log(
+      `📊 Primary keyword "${keywords[0]}" found ${primaryKeywordPosts.length} posts`,
+    );
   }
 
-  // Search by hashtags with pagination
-  for (const hashtag of hashtags.slice(0, 4)) {
-    const hashtagPosts = await searchWithPagination(`#${hashtag}`, "hashtag");
-    allPosts.push(...hashtagPosts);
+  // Only search additional keywords if we don't have enough posts from the first one
+  if (allPosts.length < targetPosts && keywords.length > 1) {
+    console.log(
+      `🔄 Primary keyword insufficient (${allPosts.length}/${targetPosts}), searching fallback keywords`,
+    );
 
-    // Early exit if we have enough posts
-    if (allPosts.length >= targetPosts * 2) break;
+    for (const keyword of keywords.slice(1, 6)) {
+      const keywordPosts = await searchWithPagination(
+        keyword,
+        "fallback_keyword",
+      );
+      allPosts.push(...keywordPosts);
+
+      console.log(
+        `📊 Fallback keyword "${keyword}" found ${keywordPosts.length} posts (total: ${allPosts.length})`,
+      );
+
+      // Early exit if we have enough posts
+      if (allPosts.length >= targetPosts * 2) {
+        console.log(
+          `✅ Reached target posts quota (${allPosts.length}/${targetPosts * 2}), stopping keyword search`,
+        );
+        break;
+      }
+    }
+  } else if (allPosts.length >= targetPosts) {
+    console.log(
+      `✅ Primary keyword provided sufficient posts (${allPosts.length}/${targetPosts}), skipping fallback keywords`,
+    );
+  }
+
+  // Search by hashtags with prioritization - only if we still need more posts
+  if (allPosts.length < targetPosts * 2 && hashtags.length > 0) {
+    console.log(
+      `🏷️  Searching hashtags to supplement posts (current: ${allPosts.length}/${targetPosts * 2})`,
+    );
+
+    // Search first hashtag extensively
+    const primaryHashtagPosts = await searchWithPagination(
+      `#${hashtags[0]}`,
+      "primary_hashtag",
+    );
+    allPosts.push(...primaryHashtagPosts);
+
+    console.log(
+      `📊 Primary hashtag "#${hashtags[0]}" found ${primaryHashtagPosts.length} posts`,
+    );
+
+    // Search additional hashtags if still needed
+    if (allPosts.length < targetPosts * 2 && hashtags.length > 1) {
+      console.log(
+        `🔄 Primary hashtag insufficient, searching fallback hashtags`,
+      );
+
+      for (const hashtag of hashtags.slice(1, 4)) {
+        const hashtagPosts = await searchWithPagination(
+          `#${hashtag}`,
+          "fallback_hashtag",
+        );
+        allPosts.push(...hashtagPosts);
+
+        console.log(
+          `📊 Fallback hashtag "#${hashtag}" found ${hashtagPosts.length} posts (total: ${allPosts.length})`,
+        );
+
+        // Early exit if we have enough posts
+        if (allPosts.length >= targetPosts * 2) {
+          console.log(
+            `✅ Reached target posts quota with hashtags (${allPosts.length}/${targetPosts * 2})`,
+          );
+          break;
+        }
+      }
+    }
+  } else if (allPosts.length >= targetPosts * 2) {
+    console.log(
+      `✅ Skipping hashtag search - already have sufficient posts (${allPosts.length}/${targetPosts * 2})`,
+    );
   }
 
   // Early exit if we couldn't find enough posts
@@ -866,6 +1174,50 @@ export const getFollowersOfFollowersFeed = async (
     };
   } catch (error) {
     console.error("Error fetching followers-of-followers feed:", error);
+    throw error;
+  }
+};
+
+export const getUserProfile = async (actor: string) => {
+  try {
+    const response = await agent.app.bsky.actor.getProfile({
+      actor,
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    throw error;
+  }
+};
+
+export const followUser = async (did: string) => {
+  try {
+    await agent.app.bsky.graph.follow.create(
+      { repo: agent.session!.did },
+      {
+        subject: did,
+        createdAt: new Date().toISOString(),
+      },
+    );
+  } catch (error) {
+    console.error("Error following user:", error);
+    throw error;
+  }
+};
+
+export const unfollowUser = async (did: string) => {
+  try {
+    // Get the user's profile to find the follow record
+    const profile = await agent.app.bsky.actor.getProfile({ actor: did });
+    
+    if (profile.data.viewer?.following) {
+      await agent.app.bsky.graph.follow.delete({
+        repo: agent.session!.did,
+        rkey: profile.data.viewer.following.split("/").pop()!,
+      });
+    }
+  } catch (error) {
+    console.error("Error unfollowing user:", error);
     throw error;
   }
 };

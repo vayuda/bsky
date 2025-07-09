@@ -1,13 +1,24 @@
-import React, { useState } from 'react';
-import { ComposePost } from './components/ComposePost';
-import { PostCarousel } from './components/PostCarousel';
-import { Login } from './components/Login';
-import FeedFactory from './components/FeedFactory';
-import { loginToBluesky, refreshNetworkCache } from './services/bluesky';
-import { useCarouselFeed } from './hooks/useCarouselFeed';
-import { BskyAgent } from '@atproto/api';
-import { RefreshCw, Home, TrendingUp, Users, Wand2 } from 'lucide-react';
-import { Button } from './components/ui/button';
+import React, { useState, useEffect } from "react";
+import { ComposePost } from "./components/ComposePost";
+import { PostCarousel } from "./components/PostCarousel";
+import { Login } from "./components/Login";
+import FeedFactory from "./components/FeedFactory";
+import { loginToBluesky, refreshNetworkCache } from "./services/bluesky";
+import { useCarouselFeed } from "./hooks/useCarouselFeed";
+import { BskyAgent } from "@atproto/api";
+import {
+  RefreshCw,
+  Home,
+  TrendingUp,
+  Users,
+  Wand2,
+  PenTool,
+} from "lucide-react";
+import { Button } from "./components/ui/button";
+
+// Feature flags
+const ENABLE_FACTORY_FEED = false; // Set to true to enable Factory feed feature
+const ENABLE_POPULAR_FEED = false; // Set to true to enable custom Popular feed (uses official algorithm when false)
 
 interface User {
   displayName: string;
@@ -20,8 +31,17 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [activeFeed, setActiveFeed] = useState<'following' | 'discover' | 'popular' | 'factory'>('following');
+  const [activeFeed, setActiveFeed] = useState<
+    "following" | "discover" | "popular" | "factory" | "create"
+  >("following");
   const [isRefreshingCache, setIsRefreshingCache] = useState(false);
+
+  // Redirect away from disabled feeds
+  useEffect(() => {
+    if (!ENABLE_FACTORY_FEED && activeFeed === "factory") {
+      setActiveFeed("following");
+    }
+  }, [activeFeed]);
 
   const {
     posts,
@@ -37,7 +57,10 @@ function App() {
     isNetworkExhausted,
   } = useCarouselFeed({
     agent,
-    feedType: activeFeed === 'factory' ? 'following' : activeFeed,
+    feedType:
+      activeFeed === "factory" || activeFeed === "create"
+        ? "following"
+        : activeFeed,
   });
 
   const handleLogin = async (identifier: string, password: string) => {
@@ -48,18 +71,21 @@ function App() {
       const loggedInAgent = await loginToBluesky(identifier, password);
 
       // Get user profile
-      const profile = await loggedInAgent.getProfile({ actor: loggedInAgent.session?.did || '' });
+      const profile = await loggedInAgent.getProfile({
+        actor: loggedInAgent.session?.did || "",
+      });
 
       setAgent(loggedInAgent);
       setUser({
         displayName: profile.data.displayName || profile.data.handle,
         handle: profile.data.handle,
-        avatar: profile.data.avatar
+        avatar: profile.data.avatar,
       });
-
     } catch (err: any) {
-      console.error('Login failed:', err);
-      setLoginError(err.message || 'Login failed. Please check your credentials.');
+      console.error("Login failed:", err);
+      setLoginError(
+        err.message || "Login failed. Please check your credentials.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -71,11 +97,11 @@ function App() {
     try {
       await agent.post({ text });
       // Refresh timeline to show the new post (only if on following feed)
-      if (activeFeed === 'following') {
+      if (activeFeed === "following") {
         await refresh();
       }
     } catch (err) {
-      console.error('Failed to create post:', err);
+      console.error("Failed to create post:", err);
     }
   };
 
@@ -85,20 +111,22 @@ function App() {
     setLoginError(null);
   };
 
-  const handleFeedChange = (newFeed: 'following' | 'discover' | 'popular' | 'factory') => {
+  const handleFeedChange = (
+    newFeed: "following" | "discover" | "popular" | "factory" | "create",
+  ) => {
     setActiveFeed(newFeed);
   };
 
   const handleRefreshCache = async () => {
     if (!agent || isRefreshingCache) return;
-    
+
     setIsRefreshingCache(true);
     try {
       await refreshNetworkCache();
       // Refresh the current feed to show new data
       await refresh();
     } catch (error) {
-      console.error('Failed to refresh cache:', error);
+      console.error("Failed to refresh cache:", error);
     } finally {
       setIsRefreshingCache(false);
     }
@@ -106,35 +134,138 @@ function App() {
 
   // Show login page if not authenticated
   if (!agent || !user) {
-    return <Login onLogin={handleLogin} isLoading={isLoading} error={loginError} />;
+    return (
+      <Login onLogin={handleLogin} isLoading={isLoading} error={loginError} />
+    );
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className={`${activeFeed === 'factory' ? 'w-full' : 'max-w-2xl mx-auto'} ${activeFeed === 'factory' ? '' : 'border-x border-gray-200'}`}>
+    <div className="min-h-screen bg-beige flex">
+      {/* Left Sidebar */}
+      <div className="w-64 border-r border-mocha/30 bg-milk">
         {/* Header */}
-        <div className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-gray-200 z-10">
+        <div className="sticky top-0 bg-milk/80 backdrop-blur-md border-b border-mocha/30 z-10 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              {user.avatar && (
+                <img
+                  src={user.avatar}
+                  alt={user.displayName}
+                  className="w-8 h-8 rounded-full"
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-dark truncate">
+                  {user.displayName}
+                </div>
+                <div className="text-xs text-coffee truncate">
+                  @{user.handle}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={handleLogout}
+                className="text-sm text-coffee hover:text-dark"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Feed Navigation */}
+        <div className="p-4 space-y-2">
+          <button
+            onClick={() => handleFeedChange("following")}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+              activeFeed === "following"
+                ? "bg-red text-milk"
+                : "text-dark hover:bg-beige hover:text-coffee"
+            }`}
+          >
+            <Home className="h-5 w-5" />
+            <span>Following</span>
+          </button>
+          <button
+            onClick={() => handleFeedChange("discover")}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+              activeFeed === "discover"
+                ? "bg-red text-milk"
+                : "text-dark hover:bg-beige hover:text-coffee"
+            }`}
+          >
+            <TrendingUp className="h-5 w-5" />
+            <span>Network</span>
+          </button>
+          <button
+            onClick={() => handleFeedChange("popular")}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+              activeFeed === "popular"
+                ? "bg-red text-milk"
+                : "text-dark hover:bg-beige hover:text-coffee"
+            }`}
+          >
+            <Users className="h-5 w-5" />
+            <span>Popular</span>
+          </button>
+          {ENABLE_FACTORY_FEED && (
+            <button
+              onClick={() => handleFeedChange("factory")}
+              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                activeFeed === "factory"
+                  ? "bg-red text-milk"
+                  : "text-dark hover:bg-beige hover:text-coffee"
+              }`}
+            >
+              <Wand2 className="h-5 w-5" />
+              <span>Factory</span>
+            </button>
+          )}
+          <button
+            onClick={() => handleFeedChange("create")}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+              activeFeed === "create"
+                ? "bg-red text-milk"
+                : "text-dark hover:bg-beige hover:text-coffee"
+            }`}
+          >
+            <PenTool className="h-5 w-5" />
+            <span>Create</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1">
+        {/* Header */}
+        <div className="sticky top-0 bg-beige/80 backdrop-blur-md border-b border-mocha/30 z-10">
           <div className="flex items-center justify-between p-4">
-            <h1 className="text-xl font-bold">
-              {activeFeed === 'following' && 'Home'}
-              {activeFeed === 'discover' && 'Network'}
-              {activeFeed === 'popular' && 'Popular'}
-              {activeFeed === 'factory' && 'Feed Factory'}
+            <h1 className="text-xl font-bold text-red font-serif">
+              {activeFeed === "following" && "Home"}
+              {activeFeed === "discover" && "Network"}
+              {activeFeed === "popular" && "Popular"}
+              {activeFeed === "factory" && ENABLE_FACTORY_FEED && "Feed Factory"}
+              {activeFeed === "create" && "Create Post"}
             </h1>
             <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => refresh()}
-                disabled={isLoadingFeed}
-                className="h-8 w-8"
-                title="Refresh feed"
-              >
-                <RefreshCw className={`h-4 w-4 ${isLoadingFeed ? 'animate-spin' : ''}`} />
-              </Button>
-              
+              {activeFeed !== "create" && !(activeFeed === "factory" && ENABLE_FACTORY_FEED) && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => refresh()}
+                  disabled={isLoadingFeed}
+                  className="h-8 w-8"
+                  title="Refresh feed"
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${isLoadingFeed ? "animate-spin" : ""}`}
+                  />
+                </Button>
+              )}
+
               {/* Cache refresh button - only show on discover feed */}
-              {activeFeed === 'discover' && (
+              {activeFeed === "discover" && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -153,97 +284,36 @@ function App() {
                   )}
                 </Button>
               )}
-              <div className="flex items-center space-x-3">
-                <span className="text-sm text-gray-600">@{user.handle}</span>
-                <button
-                  onClick={handleLogout}
-                  className="text-sm text-gray-500 hover:text-gray-700"
-                >
-                  Logout
-                </button>
-              </div>
-              <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
-                <span className="text-white text-sm font-semibold">🦋</span>
-              </div>
             </div>
-          </div>
-
-          {/* Feed Tabs */}
-          <div className="flex border-t border-gray-200">
-            <button
-              onClick={() => handleFeedChange('following')}
-              className={`flex-1 flex items-center justify-center space-x-2 py-3 text-sm font-medium transition-colors ${
-                activeFeed === 'following'
-                  ? 'text-blue-500 border-b-2 border-blue-500'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Home className="h-4 w-4" />
-              <span>Following</span>
-            </button>
-            <button
-              onClick={() => handleFeedChange('discover')}
-              className={`flex-1 flex items-center justify-center space-x-2 py-3 text-sm font-medium transition-colors ${
-                activeFeed === 'discover'
-                  ? 'text-blue-500 border-b-2 border-blue-500'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <TrendingUp className="h-4 w-4" />
-              <span>Network</span>
-            </button>
-            <button
-              onClick={() => handleFeedChange('popular')}
-              className={`flex-1 flex items-center justify-center space-x-2 py-3 text-sm font-medium transition-colors ${
-                activeFeed === 'popular'
-                  ? 'text-blue-500 border-b-2 border-blue-500'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Users className="h-4 w-4" />
-              <span>Popular</span>
-            </button>
-            <button
-              onClick={() => handleFeedChange('factory')}
-              className={`flex-1 flex items-center justify-center space-x-2 py-3 text-sm font-medium transition-colors ${
-                activeFeed === 'factory'
-                  ? 'text-blue-500 border-b-2 border-blue-500'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <Wand2 className="h-4 w-4" />
-              <span>Factory</span>
-            </button>
           </div>
         </div>
 
-        {/* Feed Factory */}
-        {activeFeed === 'factory' ? (
+        {/* Content Area */}
+        {activeFeed === "create" ? (
+          <div className="max-w-2xl mx-auto">
+            <ComposePost currentUser={user} onPost={handleNewPost} />
+          </div>
+        ) : activeFeed === "factory" && ENABLE_FACTORY_FEED ? (
           <div className="h-[calc(100vh-140px)]">
             <FeedFactory agent={agent} />
           </div>
         ) : (
-          <>
-            {/* Compose Post - Only show on Following feed */}
-            {activeFeed === 'following' && (
-              <ComposePost currentUser={user} onPost={handleNewPost} />
-            )}
-
+          <div className="max-w-2xl mx-auto">
             {/* Initial Loading State */}
             {isLoadingFeed && posts.length === 0 && (
               <div className="p-8 text-center">
-                <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-gray-600">Loading your timeline...</p>
+                <div className="w-8 h-8 border-2 border-red border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-dark">Loading your timeline...</p>
               </div>
             )}
 
             {/* Error State */}
             {feedError && (
-              <div className="p-4 bg-red-50 border-b border-gray-200">
-                <p className="text-red-600 text-center">{feedError}</p>
+              <div className="p-4 bg-red/10 border-b border-mocha/30">
+                <p className="text-red text-center">{feedError}</p>
                 <button
                   onClick={() => refresh()}
-                  className="mt-2 w-full text-center text-blue-500 hover:text-blue-600"
+                  className="mt-2 w-full text-center text-red hover:text-coffee"
                 >
                   Try again
                 </button>
@@ -262,28 +332,25 @@ function App() {
                 onLoadNextBatch={loadNextBatch}
                 isLoading={isLoadingFeed}
                 isNetworkExhausted={isNetworkExhausted}
-                feedType={activeFeed as 'following' | 'discover' | 'popular'}
+                feedType={activeFeed as "following" | "discover" | "popular"}
               />
             )}
 
             {/* Empty State */}
             {!isLoadingFeed && posts.length === 0 && !feedError && (
               <div className="p-8 text-center">
-                <p className="text-gray-600 mb-4">
-                  {activeFeed === 'following' 
-                    ? "No posts to show. Follow some people to see their posts!" 
+                <p className="text-dark mb-4">
+                  {activeFeed === "following"
+                    ? "No posts to show. Follow some people to see their posts!"
                     : "No posts available in this feed right now."}
                 </p>
-                <Button
-                  variant="outline"
-                  onClick={() => refresh()}
-                >
+                <Button variant="outline" onClick={() => refresh()}>
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Refresh
                 </Button>
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>

@@ -170,11 +170,27 @@ export const useCarouselFeed = ({
           };
           break;
         case "popular":
-          response = await agent.app.bsky.feed.getFeed({
-            feed: "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/bsky-team",
-            limit,
-            cursor: isRefresh ? undefined : cursor,
-          });
+          // Check if custom popular feed is enabled
+          const ENABLE_POPULAR_FEED = false; // Match the flag from App.tsx
+          
+          if (ENABLE_POPULAR_FEED) {
+            const popularFeed = await (
+              await import("../services/bluesky")
+            ).getPopularFeed();
+            response = {
+              data: {
+                feed: popularFeed,
+                cursor: undefined, // Our popular feed doesn't use cursor pagination
+              },
+            };
+          } else {
+            // Fall back to official algorithm
+            response = await agent.app.bsky.feed.getFeed({
+              feed: "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/bsky-team",
+              limit,
+              cursor: isRefresh ? undefined : cursor,
+            });
+          }
           break;
         case "custom":
           if (!customFeedId) throw new Error("Custom feed ID required");
@@ -294,19 +310,20 @@ export const useCarouselFeed = ({
 
   // Initial load when feedType or agent changes
   useEffect(() => {
-    const currentState = { agent, feedType };
+    const currentState = { agent, feedType, customFeedId };
     const needsInit = !initStateRef.current || 
                      initStateRef.current.agent !== agent || 
-                     initStateRef.current.feedType !== feedType;
+                     initStateRef.current.feedType !== feedType ||
+                     (feedType === 'custom' && customFeedId !== (initStateRef.current as any).customFeedId);
     
     if (agent && needsInit) {
-      console.log(`🚀 Initializing feed: ${feedType}`);
+      console.log(`🚀 Initializing feed: ${feedType}${customFeedId ? ` (${customFeedId})` : ''}`);
       initStateRef.current = currentState;
       
       // Call refresh directly without depending on it
       setIsLoading(true);
       setError(null);
-      setCursor(undefined);
+      setCursor(undefined); // Reset cursor when feed type changes to prevent cross-contamination
       setCurrentPostIndex(0);
       setIsNetworkExhausted(false);
       setSessionStats({
@@ -325,7 +342,7 @@ export const useCarouselFeed = ({
         setIsLoading(false);
       });
     }
-  }, [agent, feedType, loadPosts]);
+  }, [agent, feedType, customFeedId, loadPosts]);
 
   // Update time spent every second
   useEffect(() => {

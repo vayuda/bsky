@@ -24,24 +24,24 @@ export const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false, error 
   const isValid = identifier.trim().length > 0 && password.trim().length > 0;
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4">
+    <div className="min-h-screen bg-beige flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-white text-2xl font-bold">🦋</span>
+          <div className="w-16 h-16 bg-red rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-milk text-2xl font-bold">🦋</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Welcome to Bluesky</h1>
-          <p className="text-gray-600 mt-2">Sign in to your account</p>
+          <h1 className="text-2xl font-bold text-red font-serif">Welcome to Bluesky</h1>
+          <p className="text-dark mt-2">Sign in to your account</p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl text-center">Sign In</CardTitle>
+            <CardTitle className="text-xl text-center text-red font-serif">Sign In</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="identifier" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="identifier" className="block text-sm font-medium text-dark mb-1">
                   Email or Handle
                 </label>
                 <input
@@ -50,14 +50,14 @@ export const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false, error 
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   placeholder="you@example.com or you.bsky.social"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-mocha/30 rounded-md focus:outline-none focus:ring-2 focus:ring-red focus:border-transparent bg-milk text-dark"
                   disabled={isLoading}
                   autoComplete="username"
                 />
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="password" className="block text-sm font-medium text-dark mb-1">
                   App Password
                 </label>
                 <div className="relative">
@@ -67,7 +67,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false, error 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your app password"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
+                    className="w-full px-3 py-2 border border-mocha/30 rounded-md focus:outline-none focus:ring-2 focus:ring-red focus:border-transparent pr-10 bg-milk text-dark"
                     disabled={isLoading}
                     autoComplete="current-password"
                   />
@@ -78,19 +78,19 @@ export const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false, error 
                     disabled={isLoading}
                   >
                     {showPassword ? (
-                      <EyeOff className="h-4 w-4 text-gray-500" />
+                      <EyeOff className="h-4 w-4 text-coffee" />
                     ) : (
-                      <Eye className="h-4 w-4 text-gray-500" />
+                      <Eye className="h-4 w-4 text-coffee" />
                     )}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-coffee mt-1">
                   Use an app password from your Bluesky settings, not your main password
                 </p>
               </div>
 
               {error && (
-                <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md">
+                <div className="flex items-center space-x-2 text-red bg-red/10 p-3 rounded-md">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
                   <span className="text-sm">{error}</span>
                 </div>
@@ -103,7 +103,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false, error 
               >
                 {isLoading ? (
                   <div className="flex items-center space-x-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-beige border-t-transparent rounded-full animate-spin"></div>
                     <span>Signing in...</span>
                   </div>
                 ) : (
@@ -113,13 +113,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false, error 
             </form>
 
             <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-dark">
                 Don't have an account?{' '}
                 <a 
                   href="https://bsky.app" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="text-blue-500 hover:text-blue-600 font-medium"
+                  className="text-red hover:text-coffee font-medium"
                 >
                   Sign up on Bluesky
                 </a>
@@ -131,7 +131,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false, error 
                 href="https://bsky.app/settings/app-passwords" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-xs text-gray-500 hover:text-gray-700"
+                className="text-xs text-coffee hover:text-dark"
               >
                 Need help creating an app password?
               </a>

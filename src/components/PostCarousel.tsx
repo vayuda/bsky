@@ -61,7 +61,7 @@ interface PostCarouselProps {
   onLoadNextBatch: () => void;
   isLoading: boolean;
   isNetworkExhausted: boolean;
-  feedType: 'following' | 'discover' | 'popular' | 'custom';
+  feedType: "following" | "discover" | "popular" | "custom";
 }
 
 export const PostCarousel: React.FC<PostCarouselProps> = ({
@@ -120,74 +120,46 @@ export const PostCarousel: React.FC<PostCarouselProps> = ({
   if (!currentPost) {
     return (
       <div className="p-8 text-center">
-        <p className="text-gray-600">No posts to display</p>
+        <p className="text-coffee">No posts to display</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      {/* Progress indicator */}
-      <div className="bg-white border-b border-gray-200 p-4">
-        {/* <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-gray-600">
-            Post {currentPostIndex + 1} of {posts.length}
-          </span>
-          <div className="flex items-center space-x-2 text-sm text-gray-500">
-            <ArrowRight className="w-4 h-4" />
-            <span>Press → to continue</span>
+    <div className="max-w-4xl mx-auto p-6">
+      {/* Rounded card container */}
+      <div className="bg-milk rounded-2xl shadow-lg border border-mocha/20 overflow-hidden">
+        {/* Progress indicator */}
+        <div className="bg-beige/50 p-4 border-b border-mocha/20">
+          {/* Progress bar */}
+          <div className="w-full bg-mocha/20 rounded-full h-2">
+            <div
+              className="bg-red h-2 rounded-full transition-all duration-300"
+              style={{
+                width: `${((currentPostIndex + 1) / posts.length) * 100}%`,
+              }}
+            />
           </div>
-        </div> */}
-
-        {/* Progress bar */}
-        <div className="w-full bg-gray-200 rounded-full h-2">
-          <div
-            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-            style={{
-              width: `${((currentPostIndex + 1) / posts.length) * 100}%`,
-            }}
-          />
         </div>
-      </div>
 
-      {/* Current post */}
-      <div className="relative">
-        <Post
-          id={currentPost.id}
-          author={currentPost.author}
-          text={currentPost.text}
-          createdAt={currentPost.createdAt}
-          likeCount={currentPost.likeCount}
-          replyCount={currentPost.replyCount}
-          repostCount={currentPost.repostCount}
-          isLiked={currentPost.isLiked}
-          isReposted={currentPost.isReposted}
-          labels={currentPost.labels}
-          embed={currentPost.embed}
-          networkContext={currentPost.networkContext}
-        />
-
-        {/* Navigation hint overlay */}
-        {currentPostIndex < posts.length - 1 && (
-          <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
-            <div className="bg-blue-600 text-white p-2 rounded-full shadow-lg animate-pulse">
-              <ChevronRight className="w-5 h-5" />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Bottom navigation hint */}
-      <div className="bg-gray-50 border-t border-gray-200 p-4">
-        <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
-          {currentPostIndex < posts.length - 1 ? (
-            <>
-              <ArrowRight className="w-4 h-4" />
-              <span>Press the right arrow key to view the next post</span>
-            </>
-          ) : (
-            <span>Press → to view your session summary</span>
-          )}
+        {/* Current post */}
+        <div className="relative">
+          <Post
+            id={currentPost.id}
+            uri={currentPost.id}
+            author={currentPost.author}
+            text={currentPost.text}
+            createdAt={currentPost.createdAt}
+            likeCount={currentPost.likeCount}
+            replyCount={currentPost.replyCount}
+            repostCount={currentPost.repostCount}
+            isLiked={currentPost.isLiked}
+            isReposted={currentPost.isReposted}
+            labels={currentPost.labels}
+            embed={currentPost.embed}
+            networkContext={currentPost.networkContext}
+            isInCarousel={true}
+          />
         </div>
       </div>
     </div>

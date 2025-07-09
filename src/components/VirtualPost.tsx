@@ -41,7 +41,7 @@ export const VirtualPost: React.FC<VirtualPostProps> = ({
 
   return (
     <div ref={postRef} data-post-id={id}>
-      <Post id={id} {...postProps} />
+      <Post id={id} uri={id} {...postProps} />
     </div>
   );
 };

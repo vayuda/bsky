@@ -1,7 +1,7 @@
-import React from 'react';
-import { Card, CardContent } from './ui/card';
-import { Button } from './ui/button';
-import { Clock, Eye, BarChart3, ArrowRight } from 'lucide-react';
+import React from "react";
+import { Card, CardContent } from "./ui/card";
+import { Button } from "./ui/button";
+import { Clock, Eye, BarChart3, ArrowRight } from "lucide-react";
 
 interface SessionSummaryProps {
   postsViewed: number;
@@ -10,7 +10,7 @@ interface SessionSummaryProps {
   onLoadNextBatch: () => void;
   isLoading: boolean;
   isNetworkExhausted: boolean;
-  feedType: 'following' | 'discover' | 'popular' | 'custom';
+  feedType: "following" | "discover" | "popular" | "custom";
 }
 
 export const SessionSummary: React.FC<SessionSummaryProps> = ({
@@ -37,15 +37,15 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
   };
 
   return (
-    <Card className="border-x-0 border-t-0 border-b rounded-none bg-gradient-to-br from-blue-50 to-indigo-50">
+    <Card className="border-x-0 border-t-0 border-b rounded-2xl bg-white">
       <CardContent className="p-6">
         <div className="text-center space-y-6">
           <div className="flex justify-center">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-              <BarChart3 className="w-8 h-8 text-blue-600" />
+            <div className="w-16 h-16 bg-beige rounded-full flex items-center justify-center">
+              <BarChart3 className="w-8 h-8 text-red" />
             </div>
           </div>
-          
+
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
               Session Summary
@@ -58,34 +58,39 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
           <div className="grid grid-cols-2 gap-4 max-w-xs mx-auto">
             <div className="bg-white rounded-lg p-4 text-center">
               <div className="flex items-center justify-center mb-2">
-                <Eye className="w-5 h-5 text-blue-600" />
+                <Eye className="w-5 h-5 text-red" />
               </div>
-              <div className="text-2xl font-bold text-gray-900">{postsViewed}</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {postsViewed}
+              </div>
               <div className="text-xs text-gray-500">Posts Viewed</div>
             </div>
-            
+
             <div className="bg-white rounded-lg p-4 text-center">
               <div className="flex items-center justify-center mb-2">
-                <Clock className="w-5 h-5 text-green-600" />
+                <Clock className="w-5 h-5 text-red" />
               </div>
-              <div className="text-2xl font-bold text-gray-900">{formatTime(timeSpent)}</div>
+              <div className="text-2xl font-bold text-gray-900">
+                {formatTime(timeSpent)}
+              </div>
               <div className="text-xs text-gray-500">Time Spent</div>
             </div>
           </div>
 
           <div className="space-y-3">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-dark">
               Take a moment to reflect on what you've seen.
             </p>
-            
-            {isNetworkExhausted && feedType === 'discover' ? (
+
+            {isNetworkExhausted && feedType === "discover" ? (
               <div className="text-center space-y-3">
-                <div className="bg-orange-100 border border-orange-200 rounded-lg p-3">
-                  <p className="text-sm text-orange-800">
-                    🎉 You've explored your entire network! You've seen all available posts from people in your 1-hop network.
+                <div className="bg-coffee/10 border border-coffee/30 rounded-lg p-3">
+                  <p className="text-sm text-coffee">
+                    🎉 You've explored your entire network! You've seen all
+                    available posts from people in your 1-hop network.
                   </p>
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-coffee">
                   Follow more people or check back later for new content
                 </p>
               </div>
@@ -93,12 +98,12 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
               <Button
                 onClick={onLoadNextBatch}
                 disabled={isLoading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                className="w-full bg-coffee hover:bg-dark text-beige"
               >
                 {isLoading ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                    Loading...
+                    <div className="w-4 h-4 border-2 border-beige border-t-transparent rounded-full animate-spin mr-2"></div>
+                    <span>Loading...</span>
                   </>
                 ) : (
                   <>
@@ -108,10 +113,6 @@ export const SessionSummary: React.FC<SessionSummaryProps> = ({
                 )}
               </Button>
             )}
-          </div>
-
-          <div className="text-xs text-gray-500">
-            This intentional pause helps you stay mindful of your social media consumption
           </div>
         </div>
       </CardContent>
