@@ -10,15 +10,13 @@ import {
   RefreshCw,
   Home,
   TrendingUp,
-  Users,
-  Wand2,
+  Search,
   PenTool,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 
 // Feature flags
-const ENABLE_FACTORY_FEED = false; // Set to true to enable Factory feed feature
-const ENABLE_POPULAR_FEED = false; // Set to true to enable custom Popular feed (uses official algorithm when false)
+const ENABLE_SEARCH_FEED = true; // Set to true to enable Search feed feature
 
 interface User {
   displayName: string;
@@ -32,13 +30,19 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [activeFeed, setActiveFeed] = useState<
-    "following" | "discover" | "popular" | "factory" | "create"
+    "following" | "discover" | "search" | "create"
   >("following");
   const [isRefreshingCache, setIsRefreshingCache] = useState(false);
+  const [searchState, setSearchState] = useState<{
+    query: string;
+    isActive: boolean;
+    onRestart?: () => void;
+  }>({ query: '', isActive: false });
 
   // Redirect away from disabled feeds
   useEffect(() => {
-    if (!ENABLE_FACTORY_FEED && activeFeed === "factory") {
+    console.log(`🚀 App: activeFeed changed to "${activeFeed}"`);
+    if (!ENABLE_SEARCH_FEED && activeFeed === "search") {
       setActiveFeed("following");
     }
   }, [activeFeed]);
@@ -56,11 +60,8 @@ function App() {
     isAtSessionSummary,
     isNetworkExhausted,
   } = useCarouselFeed({
-    agent,
-    feedType:
-      activeFeed === "factory" || activeFeed === "create"
-        ? "following"
-        : activeFeed,
+    agent: activeFeed === "search" ? null : agent, // Disable carousel hook for search
+    feedType: activeFeed === "create" ? "following" : activeFeed === "search" ? "following" : activeFeed,
   });
 
   const handleLogin = async (identifier: string, password: string) => {
@@ -112,9 +113,13 @@ function App() {
   };
 
   const handleFeedChange = (
-    newFeed: "following" | "discover" | "popular" | "factory" | "create",
+    newFeed: "following" | "discover" | "search" | "create",
   ) => {
     setActiveFeed(newFeed);
+    // Reset search state when leaving search feed
+    if (newFeed !== "search") {
+      setSearchState({ query: '', isActive: false });
+    }
   };
 
   const handleRefreshCache = async () => {
@@ -198,28 +203,17 @@ function App() {
             <TrendingUp className="h-5 w-5" />
             <span>Network</span>
           </button>
-          <button
-            onClick={() => handleFeedChange("popular")}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-              activeFeed === "popular"
-                ? "bg-red text-milk"
-                : "text-dark hover:bg-beige hover:text-coffee"
-            }`}
-          >
-            <Users className="h-5 w-5" />
-            <span>Popular</span>
-          </button>
-          {ENABLE_FACTORY_FEED && (
+          {ENABLE_SEARCH_FEED && (
             <button
-              onClick={() => handleFeedChange("factory")}
+              onClick={() => handleFeedChange("search")}
               className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                activeFeed === "factory"
+                activeFeed === "search"
                   ? "bg-red text-milk"
                   : "text-dark hover:bg-beige hover:text-coffee"
               }`}
             >
-              <Wand2 className="h-5 w-5" />
-              <span>Factory</span>
+              <Search className="h-5 w-5" />
+              <span>Search</span>
             </button>
           )}
           <button
@@ -244,12 +238,30 @@ function App() {
             <h1 className="text-xl font-bold text-red font-serif">
               {activeFeed === "following" && "Home"}
               {activeFeed === "discover" && "Network"}
-              {activeFeed === "popular" && "Popular"}
-              {activeFeed === "factory" && ENABLE_FACTORY_FEED && "Feed Factory"}
+              {activeFeed === "search" && ENABLE_SEARCH_FEED && (
+                searchState.isActive ? (
+                  <span className="text-base">Search: "{searchState.query}"</span>
+                ) : (
+                  "Search"
+                )
+              )}
               {activeFeed === "create" && "Create Post"}
             </h1>
             <div className="flex items-center space-x-4">
-              {activeFeed !== "create" && !(activeFeed === "factory" && ENABLE_FACTORY_FEED) && (
+              {/* New Search button for active search */}
+              {activeFeed === "search" && ENABLE_SEARCH_FEED && searchState.isActive && searchState.onRestart && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={searchState.onRestart}
+                  className="text-sm"
+                  title="Start a new search"
+                >
+                  New Search
+                </Button>
+              )}
+              
+              {activeFeed !== "create" && !(activeFeed === "search" && ENABLE_SEARCH_FEED) && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -293,17 +305,21 @@ function App() {
           <div className="max-w-2xl mx-auto">
             <ComposePost currentUser={user} onPost={handleNewPost} />
           </div>
-        ) : activeFeed === "factory" && ENABLE_FACTORY_FEED ? (
+        ) : activeFeed === "search" && ENABLE_SEARCH_FEED ? (
           <div className="h-[calc(100vh-140px)]">
-            <FeedFactory agent={agent} />
+            <FeedFactory agent={agent} onSearchStateChange={setSearchState} />
           </div>
         ) : (
           <div className="max-w-2xl mx-auto">
-            {/* Initial Loading State */}
-            {isLoadingFeed && posts.length === 0 && (
+            {/* Loading State - show during any loading or when switching feeds */}
+            {(isLoadingFeed || posts.length === 0) && !feedError && (
               <div className="p-8 text-center">
                 <div className="w-8 h-8 border-2 border-red border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-dark">Loading your timeline...</p>
+                <p className="text-dark">
+                  {activeFeed === "following" && "Loading your timeline..."}
+                  {activeFeed === "discover" && "Loading network feed..."}
+                  {!["following", "discover"].includes(activeFeed) && "Loading..."}
+                </p>
               </div>
             )}
 
@@ -332,7 +348,7 @@ function App() {
                 onLoadNextBatch={loadNextBatch}
                 isLoading={isLoadingFeed}
                 isNetworkExhausted={isNetworkExhausted}
-                feedType={activeFeed as "following" | "discover" | "popular"}
+                feedType={activeFeed === "search" ? "custom" : activeFeed as "following" | "discover"}
               />
             )}
 

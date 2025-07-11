@@ -56,7 +56,7 @@ interface SessionStats {
 
 interface UseCarouselFeedOptions {
   agent: BskyAgent | null;
-  feedType: "following" | "discover" | "popular" | "custom";
+  feedType: "following" | "discover" | "custom" | "factory";
   customFeedId?: string;
 }
 
@@ -169,29 +169,6 @@ export const useCarouselFeed = ({
             },
           };
           break;
-        case "popular":
-          // Check if custom popular feed is enabled
-          const ENABLE_POPULAR_FEED = false; // Match the flag from App.tsx
-          
-          if (ENABLE_POPULAR_FEED) {
-            const popularFeed = await (
-              await import("../services/bluesky")
-            ).getPopularFeed();
-            response = {
-              data: {
-                feed: popularFeed,
-                cursor: undefined, // Our popular feed doesn't use cursor pagination
-              },
-            };
-          } else {
-            // Fall back to official algorithm
-            response = await agent.app.bsky.feed.getFeed({
-              feed: "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/bsky-team",
-              limit,
-              cursor: isRefresh ? undefined : cursor,
-            });
-          }
-          break;
         case "custom":
           if (!customFeedId) throw new Error("Custom feed ID required");
           const customResult = await (
@@ -201,6 +178,16 @@ export const useCarouselFeed = ({
             data: {
               feed: customResult.posts,
               cursor: customResult.cursor,
+            },
+          };
+          break;
+        case "factory":
+          // Factory feed is handled by the FeedFactory component itself, 
+          // this should not be called, but return empty to prevent errors
+          response = {
+            data: {
+              feed: [],
+              cursor: undefined,
             },
           };
           break;
@@ -316,9 +303,12 @@ export const useCarouselFeed = ({
                      initStateRef.current.feedType !== feedType ||
                      (feedType === 'custom' && customFeedId !== (initStateRef.current as any).customFeedId);
     
-    if (agent && needsInit) {
+    if (agent && needsInit && feedType !== 'factory') {
       console.log(`🚀 Initializing feed: ${feedType}${customFeedId ? ` (${customFeedId})` : ''}`);
       initStateRef.current = currentState;
+      
+      // Clear posts immediately to show loading screen
+      setPosts([]);
       
       // Call refresh directly without depending on it
       setIsLoading(true);
@@ -333,7 +323,58 @@ export const useCarouselFeed = ({
         timeSpent: 0,
       });
 
-      loadPosts(true).then((newPosts) => {
+      // Create a fresh loadPosts call to avoid the dependency loop
+      const initLoadPosts = async (): Promise<Post[]> => {
+        if (!agent) throw new Error("No agent available");
+
+        let response;
+        const limit = 10;
+
+        switch (feedType) {
+          case "discover":
+            const discoverResult = await (
+              await import("../services/bluesky")
+            ).getFollowersOfFollowersFeed(undefined, limit, false);
+            response = {
+              data: {
+                feed: discoverResult.feed,
+                cursor: discoverResult.cursor,
+              },
+            };
+            break;
+          case "custom":
+            if (!customFeedId) throw new Error("Custom feed ID required");
+            const customResult = await (
+              await import("../services/feedFactory")
+            ).feedFactory.getFeedPaginated(customFeedId, undefined, limit);
+            response = {
+              data: {
+                feed: customResult.posts,
+                cursor: customResult.cursor,
+              },
+            };
+            break;
+          case "following":
+          default:
+            response = await agent.getTimeline({
+              limit,
+              cursor: undefined,
+            });
+            break;
+        }
+
+        setCursor(response.data.cursor);
+        
+        if (feedType === 'discover' && !response.data.cursor) {
+          setIsNetworkExhausted(true);
+        } else if (feedType === 'discover' && response.data.cursor) {
+          setIsNetworkExhausted(false);
+        }
+
+        return transformPosts(response.data.feed);
+      };
+
+      initLoadPosts().then((newPosts) => {
         setPosts(newPosts);
         setIsLoading(false);
       }).catch((err: any) => {
@@ -342,7 +383,7 @@ export const useCarouselFeed = ({
         setIsLoading(false);
       });
     }
-  }, [agent, feedType, customFeedId, loadPosts]);
+  }, [agent, feedType, customFeedId, transformPosts]);
 
   // Update time spent every second
   useEffect(() => {

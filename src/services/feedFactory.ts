@@ -259,36 +259,53 @@ class FeedFactoryService {
   private async ensurePostPoolFilled(feed: CustomFeed): Promise<void> {
     const now = Date.now();
     const POOL_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
-    const MIN_POOL_SIZE = 100;
+    const MIN_POOL_SIZE = 50; // Reduced from 100 to prevent frequent refills
+    const MIN_REFILL_INTERVAL = 30 * 1000; // Minimum 30 seconds between refills
+
+    // Check if enough time has passed since last refill to prevent rapid refilling
+    const timeSinceLastRefill = now - feed.poolCacheTimestamp;
+    if (timeSinceLastRefill < MIN_REFILL_INTERVAL) {
+      return; // Skip refill if we just did one recently
+    }
+
+    // Get the number of unviewed posts to make better refill decisions
+    const unviewedPosts = feed.cachedPostPool ? 
+      feed.cachedPostPool.filter(post => !feed.shownPostUris.has(post.uri)).length : 0;
 
     // Check if we need to refill the pool
     const needsRefill =
       !feed.cachedPostPool ||
-      feed.cachedPostPool.length < MIN_POOL_SIZE ||
+      unviewedPosts < 10 || // Only refill when we're running low on unviewed posts
       now - feed.poolCacheTimestamp > POOL_CACHE_TTL;
 
     if (needsRefill) {
-      console.log(`🔄 Refilling post pool for feed "${feed.name}"...`);
+      console.log(`🔄 Refilling post pool for feed "${feed.name}" (${unviewedPosts} unviewed posts remaining)...`);
 
-      // Fetch a large batch of posts and cache them
-      const posts = await generateCustomFeed(
-        feed.searchParams.keywords,
-        feed.searchParams.contentTypes,
-        feed.searchParams.hashtags,
-        feed.searchParams.requiresMedia,
-        feed.searchParams.mediaType,
-        200, // Fetch a large pool
-        feed.description,
-      );
+      try {
+        // Fetch a large batch of posts and cache them
+        const posts = await generateCustomFeed(
+          feed.searchParams.keywords,
+          feed.searchParams.contentTypes,
+          feed.searchParams.hashtags,
+          feed.searchParams.requiresMedia,
+          feed.searchParams.mediaType,
+          150, // Reduced from 200 to be more conservative
+          feed.description,
+        );
 
-      // Cache the posts and calculate quality scores
-      feed.cachedPostPool = posts;
-      feed.poolCacheTimestamp = now;
-      feed.postQualityScores = this.calculateQualityScores(posts);
+        // Cache the posts and calculate quality scores
+        feed.cachedPostPool = posts;
+        feed.poolCacheTimestamp = now;
+        feed.postQualityScores = this.calculateQualityScores(posts);
 
-      console.log(
-        `✅ Cached ${posts.length} posts in pool with quality scores`,
-      );
+        console.log(
+          `✅ Cached ${posts.length} posts in pool with quality scores`,
+        );
+      } catch (error) {
+        console.error(`Failed to refill post pool for feed "${feed.name}":`, error);
+        // Update timestamp anyway to prevent immediate retry
+        feed.poolCacheTimestamp = now;
+      }
     }
   }
 

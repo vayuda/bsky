@@ -22,7 +22,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+ignore
 .env
 CLAUDE.md
-ENGAGEMENT_RANKING.md
-FEED_FACTORY_IMPROVEMENTS.md

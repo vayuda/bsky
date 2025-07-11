@@ -61,7 +61,7 @@ interface PostCarouselProps {
   onLoadNextBatch: () => void;
   isLoading: boolean;
   isNetworkExhausted: boolean;
-  feedType: "following" | "discover" | "popular" | "custom";
+  feedType: "following" | "discover" | "custom" | "factory";
 }
 
 export const PostCarousel: React.FC<PostCarouselProps> = ({

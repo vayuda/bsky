@@ -25,7 +25,7 @@ interface Post {
 
 interface UseVirtualFeedOptions {
   agent: BskyAgent | null;
-  feedType: "following" | "discover" | "popular";
+  feedType: "following" | "discover";
   visibleThreshold?: number; // How many posts to keep visible
   loadThreshold?: number; // When to load more (posts from bottom)
 }
@@ -103,13 +103,6 @@ export const useVirtualFeed = ({
               cursor: discoverResult.cursor
             }
           };
-          break;
-        case "popular":
-          response = await agent.app.bsky.feed.getFeed({
-            feed: "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/bsky-team",
-            limit,
-            cursor: isRefresh ? undefined : cursor,
-          });
           break;
         case "following":
         default:

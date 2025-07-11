@@ -12,6 +12,7 @@ export const loginToBluesky = async (identifier: string, password: string) => {
 
 export const getTimeline = async () => {
   const response = await agent.getTimeline();
+  console.log(`✅ FOLLOWING FEED: Loaded ${response.data.feed.length} posts from followed users only`);
   return response.data.feed;
 };
 
@@ -21,131 +22,6 @@ export const getDiscoverFeed = async () => {
   return response.data.feed;
 };
 
-export const getPopularFeed = async () => {
-  try {
-    // Get posts from recent timeframe and sort by engagement
-    const popularPosts: any[] = [];
-    
-    // Search for posts with high engagement from the last 24 hours
-    const searchTerms = [
-      "", // Empty search to get recent posts
-      "the", // Common word to find popular discussions
-      "new", // Posts about new things tend to be popular
-      "just", // Posts with "just" tend to be timely
-      "today", // Today's popular content
-    ];
-    
-    for (const term of searchTerms.slice(0, 3)) { // Limit to 3 terms for performance
-      try {
-        const searchResult = await searchPosts(term, 50);
-        
-        // Filter to recent posts (last 24 hours) with good engagement
-        const allPosts = searchResult.posts;
-        const recentPosts: any[] = [];
-        const oldPosts: any[] = [];
-        
-        console.log(`📊 Search term "${term}": Found ${allPosts.length} total posts`);
-        
-        allPosts.forEach(post => {
-          const postAge = Date.now() - new Date(post.indexedAt).getTime();
-          const hoursOld = postAge / (1000 * 60 * 60);
-          const totalEngagement = (post.likeCount || 0) + (post.replyCount || 0) + (post.repostCount || 0);
-          
-          if (hoursOld <= 24) {
-            recentPosts.push({
-              ...post,
-              hoursOld: Math.round(hoursOld * 10) / 10,
-              totalEngagement
-            });
-          } else {
-            oldPosts.push({
-              ...post,
-              hoursOld: Math.round(hoursOld * 10) / 10,
-              totalEngagement
-            });
-          }
-        });
-        
-        console.log(`📊 "${term}" - Last 24hrs: ${recentPosts.length} posts, Older: ${oldPosts.length} posts`);
-        
-        // Show engagement stats for recent posts
-        if (recentPosts.length > 0) {
-          const engagementStats = recentPosts.map(p => p.totalEngagement).sort((a, b) => b - a);
-          console.log(`📊 "${term}" - Recent engagement range: ${engagementStats[0]} (max) to ${engagementStats[engagementStats.length - 1]} (min)`);
-          console.log(`📊 "${term}" - Top 5 recent posts:`, recentPosts.slice(0, 5).map(p => `${p.totalEngagement} engagement (${p.hoursOld}h old)`));
-        }
-        
-        // Filter by engagement threshold
-        const highEngagementPosts = recentPosts.filter(post => post.totalEngagement >= 5);
-        console.log(`📊 "${term}" - Posts with ≥5 engagement: ${highEngagementPosts.length}/${recentPosts.length}`);
-        
-        popularPosts.push(...highEngagementPosts);
-        
-        // Small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 200));
-      } catch (error) {
-        console.warn(`Search failed for term "${term}":`, error);
-      }
-    }
-    
-    // Remove duplicates
-    const uniquePosts = popularPosts.filter((post, index, array) => 
-      array.findIndex(p => p.uri === post.uri) === index
-    );
-    
-    // Sort by engagement score (weighted: likes + replies*2 + reposts*1.5)
-    const scoredPosts = uniquePosts.map(post => ({
-      ...post,
-      engagementScore: (post.likeCount || 0) + (post.replyCount || 0) * 2 + (post.repostCount || 0) * 1.5
-    }));
-    
-    // Sort by engagement score and take top posts
-    scoredPosts.sort((a, b) => b.engagementScore - a.engagementScore);
-    
-    // Final stats before returning
-    console.log(`📈 FINAL POPULAR FEED STATS:`);
-    console.log(`📈 Total unique posts found: ${uniquePosts.length}`);
-    console.log(`📈 Posts after scoring: ${scoredPosts.length}`);
-    
-    if (scoredPosts.length > 0) {
-      const topEngagement = scoredPosts.slice(0, 10).map(p => ({
-        score: p.engagementScore,
-        likes: p.likeCount || 0,
-        replies: p.replyCount || 0,
-        reposts: p.repostCount || 0,
-        hours: p.hoursOld,
-        author: p.author.handle
-      }));
-      console.log(`📈 Top 10 posts by engagement:`, topEngagement);
-    }
-    
-    // Convert to feed format
-    const feed = scoredPosts.slice(0, 30).map(post => ({
-      post: post,
-      reply: undefined,
-      reason: undefined,
-      feedContext: undefined,
-    }));
-    
-    console.log(`📈 Popular feed: Returning ${feed.length} posts with high engagement`);
-    return feed;
-    
-  } catch (error) {
-    console.error("Error fetching popular feed:", error);
-    
-    // Fallback to official algorithm if our implementation fails
-    try {
-      const response = await agent.app.bsky.feed.getFeed({
-        feed: "at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/bsky-team",
-        limit: 30,
-      });
-      return response.data.feed;
-    } catch (fallbackError) {
-      console.error("Fallback popular feed also failed:", fallbackError);
-      return [];
-    }
-  }
-};
 
 export const createPost = async (text: string) => {
   await agent.post({ text });
@@ -391,12 +267,20 @@ export const generateCustomFeed = async (
     let pageHops = [5, 10, 20, 40, 80]; // Exponential hopping sequence
     let currentHopIndex = 0;
 
-    // Phase 1: Exponential hopping to find images quickly
+    // Phase 1: Exponential hopping to find posts quickly
+    console.log(
+      `  🔍 EXPONENTIAL HOPPING: Starting exponential hop search for "${query}" (target pages: ${pageHops.join(', ')})`,
+    );
+    let foundPostsOnPage = false;
     while (
       currentHopIndex < pageHops.length &&
-      foundPosts.length < targetPosts / keywords.length
+      foundPosts.length < targetPosts / keywords.length &&
+      !foundPostsOnPage
     ) {
       const targetPage = pageHops[currentHopIndex];
+      console.log(
+        `  ⏩ HOPPING: Jumping to page ${targetPage} for "${query}" (hop ${currentHopIndex + 1}/${pageHops.length})`,
+      );
 
       // Skip pages we've already processed
       while (pageCount < targetPage - 1 && cursor) {
@@ -460,15 +344,20 @@ export const generateCustomFeed = async (
           await new Promise((resolve) => setTimeout(resolve, 300));
 
           console.log(
-            `  📄 ${query} page ${pageCount} (hop ${targetPage}): ${ageFilteredPosts.length}/${posts.length} posts in age range, ${postsWithImages.length} with images`,
+            `  📄 HOP: ${query} page ${pageCount} (hop ${targetPage}): ${ageFilteredPosts.length}/${posts.length} posts in age range, ${postsWithImages.length} with images`,
           );
 
-          // If we found images, break out of exponential hopping
-          if (postsWithImages.length > 0) {
+          // If we found any posts in age range, switch to sequential search
+          if (ageFilteredPosts.length > 0) {
             console.log(
-              `  🎯 Found ${postsWithImages.length} image posts on page ${pageCount}, switching to backward search`,
+              `  🎯 HOP SUCCESS: Found ${ageFilteredPosts.length} posts on page ${pageCount}, ending exponential hopping and switching to sequential search`,
             );
+            foundPostsOnPage = true;
             break;
+          } else {
+            console.log(
+              `  ❌ HOP: No posts found on page ${pageCount}, continuing to next hop...`,
+            );
           }
         } catch (error) {
           console.warn(
@@ -482,13 +371,94 @@ export const generateCustomFeed = async (
       currentHopIndex++;
     }
 
+    if (!foundPostsOnPage && currentHopIndex >= pageHops.length) {
+      console.log(
+        `  ❌ EXPONENTIAL HOPPING COMPLETE: No posts found in any hop pages for "${query}", skipping forward/backward search`,
+      );
+    }
+
+    // Phase 1.5: Sequential forward search from where we found posts
+    if (foundPostsOnPage && foundPosts.length < targetPosts / keywords.length) {
+      console.log(
+        `  ➡️ FORWARD SEARCH: Starting sequential forward search for "${query}" from page ${pageCount + 1} (currently have ${foundPosts.length} posts, need ${Math.ceil(targetPosts / keywords.length)})`,
+      );
+
+      let sequentialPages = 0;
+      const maxSequentialPages = 15; // Search next 15 pages sequentially
+
+      while (
+        cursor &&
+        sequentialPages < maxSequentialPages &&
+        foundPosts.length < targetPosts / keywords.length
+      ) {
+        try {
+          const result = await searchPosts(query, 100, cursor);
+          const posts = result.posts;
+          cursor = result.cursor;
+          pageCount++;
+          sequentialPages++;
+
+          if (posts.length === 0) break;
+
+          // Apply age filter first
+          const ageFilteredPosts = filterPostsByAge(posts);
+
+          // Add to collection with search context
+          foundPosts.push(
+            ...ageFilteredPosts.map((post) => ({
+              ...post,
+              searchTerm: query,
+              searchType,
+            })),
+          );
+
+          // Track image posts for potential backward search
+          const postsWithImages = ageFilteredPosts.filter(
+            (post) => post.embed?.images?.length > 0 || post.embed?.video,
+          );
+          imagePosts.push(
+            ...postsWithImages.map((post) => ({
+              ...post,
+              searchTerm: query,
+              searchType,
+            })),
+          );
+
+          // Rate limiting
+          await new Promise((resolve) => setTimeout(resolve, 300));
+
+          console.log(
+            `  📄 FORWARD: ${query} sequential page ${pageCount} (${sequentialPages}/${maxSequentialPages}): ${ageFilteredPosts.length}/${posts.length} posts in age range, total found: ${foundPosts.length}`,
+          );
+
+          // If we're not finding much, reduce the sequential search
+          if (ageFilteredPosts.length === 0 && sequentialPages >= 5) {
+            console.log(
+              `  ⚠️ FORWARD: No posts found in last page, stopping sequential search early (${sequentialPages}/${maxSequentialPages} pages searched)`,
+            );
+            break;
+          }
+        } catch (error) {
+          console.warn(
+            `Failed to search sequential page ${pageCount} for "${query}":`,
+            error,
+          );
+          break;
+        }
+      }
+
+      console.log(
+        `  ✅ FORWARD SEARCH COMPLETE: ${sequentialPages} pages searched sequentially, ${foundPosts.length} total posts found from "${query}"`,
+      );
+    }
+
     // Phase 2: If we found images, go backwards in time until pool quota is reached
     if (
       imagePosts.length > 0 &&
       foundPosts.length < targetPosts / keywords.length
     ) {
       console.log(
-        `  ⏪ Starting backward time search for "${query}" to fill pool quota`,
+        `  ⏪ BACKWARD SEARCH: Starting backward time search for "${query}" to fill pool quota (found ${imagePosts.length} image posts, have ${foundPosts.length}/${Math.ceil(targetPosts / keywords.length)} posts)`,
       );
 
       // Continue searching backwards from current position
@@ -525,7 +495,7 @@ export const generateCustomFeed = async (
           await new Promise((resolve) => setTimeout(resolve, 300));
 
           console.log(
-            `  📄 ${query} backward page ${backwardPages}: ${ageFilteredPosts.length}/${posts.length} posts in age range`,
+            `  📄 BACKWARD: ${query} backward page ${backwardPages} (${backwardPages}/${maxBackwardPages}): ${ageFilteredPosts.length}/${posts.length} posts in age range, total found: ${foundPosts.length}`,
           );
         } catch (error) {
           console.warn(
@@ -535,10 +505,22 @@ export const generateCustomFeed = async (
           break;
         }
       }
+      
+      console.log(
+        `  ✅ BACKWARD SEARCH COMPLETE: ${backwardPages} backward pages searched for "${query}"`,
+      );
+    } else if (imagePosts.length === 0) {
+      console.log(
+        `  ⏭️ SKIPPING BACKWARD SEARCH: No image posts found for "${query}" to trigger backward search`,
+      );
+    } else {
+      console.log(
+        `  ⏭️ SKIPPING BACKWARD SEARCH: Already have enough posts (${foundPosts.length}/${Math.ceil(targetPosts / keywords.length)}) for "${query}"`,
+      );
     }
 
     console.log(
-      `  ✅ ${query}: Found ${foundPosts.length} posts (${imagePosts.length} with images) after ${pageCount} pages`,
+      `  ✅ ${query}: Found ${foundPosts.length} posts (${imagePosts.length} with images) after ${pageCount} pages total`,
     );
     return foundPosts;
   };
@@ -763,12 +745,14 @@ interface NetworkCache {
   followingList: { users: string[]; timestamp: number } | null;
   networkGraph: Map<string, { weight: number; via: string; timestamp: number }>;
   userFollowers: Map<string, { followers: string[]; timestamp: number }>;
+  userProfiles: Map<string, { handle: string; displayName: string }>;
 }
 
 const cache: NetworkCache = {
   followingList: null,
   networkGraph: new Map(),
   userFollowers: new Map(),
+  userProfiles: new Map(),
 };
 
 // Persistent cache using localStorage
@@ -780,6 +764,7 @@ interface PersistentCache {
     [string, { weight: number; via: string; timestamp: number }]
   >;
   userFollowers: Array<[string, { followers: string[]; timestamp: number }]>;
+  userProfiles: Array<[string, { handle: string; displayName: string }]>;
 }
 
 const savePersistentCache = (userDid: string) => {
@@ -788,6 +773,7 @@ const savePersistentCache = (userDid: string) => {
       followingList: cache.followingList,
       networkGraph: Array.from(cache.networkGraph.entries()),
       userFollowers: Array.from(cache.userFollowers.entries()),
+      userProfiles: Array.from(cache.userProfiles.entries()),
     };
 
     localStorage.setItem(
@@ -811,11 +797,13 @@ const loadPersistentCache = (userDid: string) => {
     cache.followingList = persistentData.followingList;
     cache.networkGraph = new Map(persistentData.networkGraph);
     cache.userFollowers = new Map(persistentData.userFollowers);
+    cache.userProfiles = new Map(persistentData.userProfiles || []);
 
     console.log("📥 Loaded cache from localStorage");
     console.log("- Following list:", cache.followingList ? "cached" : "empty");
     console.log("- Network graph size:", cache.networkGraph.size);
     console.log("- User followers cache size:", cache.userFollowers.size);
+    console.log("- User profiles cache size:", cache.userProfiles.size);
   } catch (error) {
     console.warn("Failed to load cache from localStorage:", error);
   }
@@ -829,6 +817,7 @@ const clearPersistentCache = (userDid: string) => {
     cache.followingList = null;
     cache.networkGraph.clear();
     cache.userFollowers.clear();
+    cache.userProfiles.clear();
 
     // Clear network posts cache
     networkPostsCache = [];
@@ -944,6 +933,14 @@ export const getFollowersOfFollowers = async (limit = 100) => {
         followingList.push(
           ...response.data.follows.map((follow) => follow.did),
         );
+        
+        // Store user profiles in cache for later use
+        response.data.follows.forEach((follow) => {
+          cache.userProfiles.set(follow.did, {
+            handle: follow.handle,
+            displayName: follow.displayName || follow.handle,
+          });
+        });
         cursor = response.data.cursor;
 
         // Prevent infinite loops and rate limiting
@@ -1017,10 +1014,14 @@ export const getFollowersOfFollowers = async (limit = 100) => {
 
           const existing = networkGraph.get(followerDid);
           const weight = existing ? existing.weight + 1 : 1;
+          
+          // Get display name from cached profile
+          const profile = cache.userProfiles.get(followedUserId);
+          const viaName = profile?.displayName || profile?.handle || followedUserId;
 
           networkGraph.set(followerDid, {
             weight,
-            via: followedUserId,
+            via: viaName,
             timestamp: now,
           });
         });
@@ -1110,10 +1111,20 @@ export const getFollowersOfFollowersFeed = async (
       const networkUserIds = network.slice(0, 20).map((n) => n.userId); // Use more users for variety
       const posts: any[] = [];
 
+      // Get current user's following list to ensure separation
+      const followingList = cache.followingList ? cache.followingList.users : [];
+      console.log(`🔍 FEED SEPARATION: Fetching network posts from ${networkUserIds.length} users, excluding ${followingList.length} followed users`);
+
       // Fetch posts from network users sequentially
       for (let i = 0; i < networkUserIds.length && posts.length < 50; i++) {
         // Get more posts for pagination
         const userId = networkUserIds[i];
+
+        // CRITICAL: Double-check this user is NOT in our following list
+        if (followingList.includes(userId)) {
+          console.log(`⚠️ FEED SEPARATION: Skipping ${userId} - found in following list (should not happen)`);
+          continue;
+        }
 
         try {
           const response = await agent.app.bsky.feed.getAuthorFeed({
@@ -1133,6 +1144,7 @@ export const getFollowersOfFollowersFeed = async (
           }));
 
           posts.push(...postsWithContext);
+          console.log(`✅ NETWORK FEED: Added ${response.data.feed.length} posts from ${userId} (via network, not followed)`);
 
           // Small delay between requests
           await new Promise((resolve) => setTimeout(resolve, 200));
@@ -1148,7 +1160,7 @@ export const getFollowersOfFollowersFeed = async (
       );
       networkCacheTimestamp = now;
 
-      console.log(`✅ Cached ${networkPostsCache.length} network posts`);
+      console.log(`✅ NETWORK FEED: Cached ${networkPostsCache.length} unique posts from followers-of-followers (excluded ${followingList.length} followed users)`);
     }
 
     // Pagination using cached posts

@@ -189,7 +189,7 @@ export const Post: React.FC<PostProps> = ({
                   <>
                     <span className="text-gray-500 text-sm">·</span>
                     <span className="text-xs text-white bg-red px-2 py-1 rounded-full">
-                      via network
+                      via {networkContext.via}
                     </span>
                   </>
                 )}
@@ -341,7 +341,7 @@ export const Post: React.FC<PostProps> = ({
                   <>
                     <span className="text-gray-500 text-sm">·</span>
                     <span className="text-xs text-white bg-red px-2 py-1 rounded-full">
-                      via network
+                      via {networkContext.via}
                     </span>
                   </>
                 )}
